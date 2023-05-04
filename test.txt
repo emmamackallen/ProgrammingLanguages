@@ -1,0 +1,9 @@
+I = \x.x
+K = \x.\y.(x)
+S = \x.\y.\z.(xz(yz))
+B = \x.\y.\z.(x(yz))
+C = \x.\y.\z.(xzy)
+W = \x.\y.(xyy)
+P = \x.\y.\z.(zxy)
+O = (\x.(xx))(\x.(xx)) 
+L = \x.(xx)

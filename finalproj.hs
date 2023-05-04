@@ -48,28 +48,33 @@ sr (PC e2 : Eql : PC (Name n) : s) i = (PC e2 : Eql : PC (Name n) : s)
 --shift phase
 sr s (i:is) = sr (i:s) is
 sr (Err e : s) i = [Err e]
+sr s [] = s
 
 cbn :: Comb -> Env -> Comb
 cbn (Var x) env  = Var x
 cbn (Abs f y) env = Abs f (cbn y env)
+cbn (App (Abs f y) x) env = subst (f, x) y
 cbn (App x y) env = App (cbn x env) (cbn y env)
-cbn (App (Abs f y) x) env = cbn (subst (f, x) y) env
 cbn (Name x) env = cbn (lookUp x env) env 
 
-
+runCbn :: Comb -> Env -> Comb
+runCbn c env = let d = cbn c env 
+                in if (c == d) then c else runCbn d env 
+            
 lookUp :: CName -> Env -> Comb
 lookUp n [] = error $ "Cannot find function " ++ n
 lookUp n (x:xs) | (n == fst x) = snd x
                       | otherwise = lookUp n xs
 
 subst :: (Vars, Comb) -> Comb -> Comb
-subst (x, t) (Var v) | v == x = t 
-                     | otherwise = Var v
-subst (x, t) (App s1 s2) = subst (x, t) s1 `App` subst (x,t) s2
-subst (x, t) (Abs y r) | not (elem y (fv t)) = Abs y (subst (x,t) r)
-                       | otherwise = let z = freshVar (x : y : fv t)
+subst (f, x) (Var y) | y == f = x 
+                     | otherwise = Var y
+subst (f, x) (App s1 s2) = subst (f, x) s1 `App` subst (f,x) s2
+subst (f, x) (Abs y r) | f == y = Abs y r
+                       | not (elem y (fv x)) = Abs y (subst (f,x) r)
+                       | otherwise = let z = freshVar (f : y : fv x)
                                          r' = subst (y, Var z) r
-                                     in Abs z (subst (x,t) r') 
+                                     in Abs z (subst (f,x) r') 
 
 fv :: Comb -> [Vars]  
 fv (Var x) = [x]                                  
@@ -83,22 +88,33 @@ allVars = "" : allVars >>= applet where
   applet s = map (\x -> s ++ [x]) ['a'..'z']
 
 freshVar :: [Vars] -> Vars
-freshVar lst = head $ filter (\x -> not (elem x lst)) allVars                                     
+freshVar lst = head $ filter (\x -> not (elem x lst)) allVars    
+
+sortParser :: Either (CName, Comb) String -> (CName, Comb)
+sortParser x = case x of
+           Left e -> e
+           Right e -> error $ "Wrong: " ++ show e 
+
+sortParser2 :: Either Comb String -> Comb
+sortParser2 x = case x of
+            Left e -> e
+            Right e -> error $ "Wrong: " ++ show e 
 
 main :: IO ()
 main = do
-  putStrLn $ "Input file name: \n"
+  putStrLn $ "Input file name: "
   fileName <- getLine
   file <- readFile fileName
   let fileLines = lines file
 
   let lexed = map lexer fileLines
-  let env = map parser lexed 
+  let env = map (sortParser . parser) lexed
 
-  putStrLn $ "Enter your definition: \n"
-  newDef <- getLine
+  putStrLn $ "Enter your definition: "
+  newDef <- getLine 
   let lexedDef = lexer newDef
-  let parseDef = parser2 lexedDef
+  putStrLn (show lexedDef)
+  let parseDef = sortParser2 (parser2 lexedDef)
 
-  let redux = cbn parseDef env
-  putStr $ "Reduced function: " ++ redux -- ?
+  let redux = runCbn parseDef env
+  putStrLn $ "Reduced function: " ++ show redux -- ?
